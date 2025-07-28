@@ -1,0 +1,315 @@
+---
+title: "Ergebnisse Studie 1"
+author: "Lina"
+date: today 
+format: 
+  html:
+    self-contained: true 
+    toc: true 
+    toc-title: Inhalt
+    toc-location: left 
+    theme: 
+      dark: superhero
+      light: minty
+    fontsize: 32 px 
+    font-family: Roboto
+    grid:
+      sidebar-width: 300px
+      body-width: 900px
+      margin-width: 300px
+      gutter-width: 1.5rem
+    code-tools: 
+     source: true
+     toggle: false
+     caption: This is my code
+lang: de
+citation-location: margin
+execute: 
+  echo: fenced
+  warning: false
+  messages: false
+  error: true
+code-fold: false
+code-summary: Hier siehst du den Code... 
+---
+
+```{r}
+#| eval: true
+#| include: false
+library(ggplot2)
+library(tidyverse)
+library(readxl)
+library(dplyr)
+library(plotly)
+library(tidyr)
+library(stringr)
+library(writexl)
+library(openxlsx)
+library(DT)
+
+
+darts = read_excel("/Users/linafricke/Documents/Promotion/Studie 2 /1_Pilotstudien/Pilot 2/Pilot_2_Übersicht.xlsx")
+
+```
+
+::: {.callout-important}
+Es wurden bisher _n_=`r (ncol(darts)-2)/2` Proband*innen erhoben.
+:::
+
+
+# Präprozessierungs-Schritte zur Berechnung der Distanz zum Bulls Eye
+
+::: {.panel-tabset}
+
+## 1 Langformat
+
+Säubern des Datensatzes, Festlegen von NA und Formatierung von Wide- in Long-Format
+```{r}
+#| eval: true
+#| echo: true
+
+# Datensatz präprozessieren
+
+# Alle Spalten als numerisch angeben
+darts_clean = darts %>%
+  mutate(across(starts_with("vp"), ~ as.numeric(str_trim(.))))
+
+# NaNs richtig benennen
+darts_clean = darts_clean %>%
+  mutate(across(starts_with("vp"), ~ ifelse(is.nan(.), NA, .)))
+
+# Daten ins long-format bringen
+long_darts = darts_clean %>%
+  pivot_longer(cols = starts_with("vp"),
+               names_to = c("VP", ".value"),
+               names_pattern = "vp(..)([xy])") %>%
+  rename(x = x, y = y) %>%
+  mutate(VP = paste0("vp", VP))  # optional, zur Klarheit
+
+# .. und richtig sortieren
+long_darts = long_darts %>%
+  arrange(VP, Block, Wurf)
+```
+
+## 2 Distanz/Wurf
+
+Berechnung der Distanzen jedes einzelnen Wurfs zu den individuellen Bulls-Eye-Korrdinaten
+```{r}
+#| eval: true
+#| echo: true
+
+# Distanzen zum Bulls Eye (0/0) berechnen
+
+# Referenzpunkte (Block 0, Wurf 0 je Proband)
+bull = long_darts %>%
+  filter(Block == 0, Wurf == 0) %>%
+  select(VP, X_ref = x, Y_ref = y)
+
+# Referenz (Bulls Eye in Datensatz integrieren)
+darts_distance = long_darts %>%
+  left_join(bull)  
+
+# Distanz berechnen
+darts_distance = darts_distance %>%
+  mutate(distance = sqrt((x - X_ref)^2 + (y - Y_ref)^2))
+
+colnames(darts_distance)[1:3] = c("block", "number", "vp")
+
+#x_ref und y-Ref wieder löschen
+darts_distance = darts_distance %>%
+  select(-X_ref, -Y_ref)
+```
+
+## 3 Mittelwert & Median / Block
+
+Mittelwert der Distanzen pro Block berechnen
+```{r}
+#| eval: true
+#| echo: true
+
+# Mittelwert der Distanz berechnen
+mean_distance = darts_distance %>%
+  filter(number %in% 1:8) %>%
+  group_by(vp, block) %>%
+  summarise(mean_distance = mean(distance, na.rm = TRUE), .groups = "drop")
+```
+
+Median der Distanzen pro Block berechnen
+```{r}
+#| eval: true
+#| echo: true
+
+# Median der Distanz berechnen
+median_distance = darts_distance %>%
+  filter(number %in% 1:8) %>%
+  group_by(vp, block) %>%
+  summarise(median_distance = median(distance, na.rm = TRUE), .groups = "drop")
+```
+
+
+## 4 Output
+
+Hier werden die Daten zur Mittleren Distanz und zum Median der Distanz pro Proband wieder ins wide-format gebracht und als csv oder excel-Datei gespeichert unter dem aktuellem Datum und "** Darts Distanz"
+
+```{r}
+#| eval: true
+#| echo: true
+
+# Output-Datei generieren
+
+# Mittelwert-Wide
+mittelwerte_wide <- mean_distance %>%
+  pivot_wider(names_from = vp, values_from = mean_distance)
+
+# Median-Wide
+median_wide <- median_distance %>%
+  pivot_wider(names_from = vp, values_from = median_distance)
+
+
+# Transponieren: Mittelwert
+transpose_mean <- mittelwerte_wide %>%
+  select(-block) %>%
+  t() %>%
+  as.data.frame()
+colnames(transpose_mean) <- paste0("AvgB_", unique(mittelwerte_wide$block))
+transpose_mean$VP <- rownames(transpose_mean)
+transpose_mean <- transpose_mean %>% relocate(VP)
+
+# Transponieren: Median
+transpose_median <- median_wide %>%
+  select(-block) %>%
+  t() %>%
+  as.data.frame()
+colnames(transpose_median) <- paste0("MedB_", unique(median_wide$block))
+transpose_median$VP <- rownames(transpose_median)
+transpose_median <- transpose_median %>% relocate(VP)
+
+# Output-Ordner und Dateiname
+output_ordner <- "/Users/linafricke/Documents/Promotion/Studie 2 /1_Pilotstudien/Pilot 2"
+dateiname <- paste0(Sys.Date(), "_Darts_Distanz.xlsx")
+pfad <- file.path(output_ordner, dateiname)
+
+# Workbook erstellen
+wb <- createWorkbook()
+
+# Blätter hinzufügen
+addWorksheet(wb, "Mittelwert")
+addWorksheet(wb, "Median")
+
+# Daten schreiben
+writeData(wb, sheet = "Mittelwert", transpose_mean)
+writeData(wb, sheet = "Median", transpose_median)
+
+# Datei speichern
+saveWorkbook(wb, pfad, overwrite = TRUE)
+```
+:::
+
+# Daten (jeder Block)
+
+Mittelwert pro Proband:
+
+```{r}
+#| eval: true
+#| echo: false
+
+library(DT)
+
+datatable(
+  transpose_mean,
+  rownames = F,
+  colnames = c("VP", "Block 1", "Block 2", "Block 3", "Block 4", "Block 5", "Block 6", "Block 7", "Block 8", "Block 9", "Block 10", "Block 11", "Block 12", "Block 13", "Block 14", "Block 15", "Block 16", "Block 17", "Block 18", "Block 19", "Block 20")
+) %>%
+   formatRound(columns = 2:ncol(transpose_mean), digits = 2) %>%
+  formatStyle(
+    columns = 1:ncol(transpose_mean)
+  )
+
+```
+
+Median pro Proband:
+
+```{r}
+#| eval: true
+#| echo: false
+
+library(dplyr)
+library(DT)
+
+datatable(
+  transpose_median,
+  rownames = F,
+  colnames = c("VP", "Block 1", "Block 2", "Block 3", "Block 4", "Block 5", "Block 6", "Block 7", "Block 8", "Block 9", "Block 10", "Block 11", "Block 12", "Block 13", "Block 14", "Block 15", "Block 16", "Block 17", "Block 18", "Block 19", "Block 20")
+) %>%
+  formatRound(columns = 2:ncol(transpose_median), digits = 2)
+```
+
+
+# Diagramm: Mittelwert zum Bulls Eye
+
+```{r}
+#| eval: true
+#| include: false
+
+# Aggregierte Werte pro Block (Würfe 1–8)
+darts_summary <- darts_distance %>%
+  filter(number %in% 1:8) %>%  # Referenzwurf (0) ausschließen
+  group_by(block) %>%
+  summarise(
+    mean_dist = mean(distance, na.rm = TRUE),
+    median_dist = median(distance, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+```{r}
+#| eval: true
+#| echo: false
+darts_long <- darts_summary %>%
+  select(block, mean_dist, median_dist) %>%
+  pivot_longer(cols = c(mean_dist, median_dist),
+               names_to = "Typ", values_to = "Distanz") %>%
+  mutate(Typ = recode(Typ,
+                      "mean_dist" = "Mittelwert",
+                      "median_dist" = "Median"))
+
+graph <- ggplot(darts_long, aes(x = block, y = Distanz, color = Typ)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dotted") +
+  
+  scale_x_continuous(breaks = 1:20) +
+  scale_y_continuous(limits = c(60, 100), breaks = seq(60, 100, by = 5)) +
+
+  scale_color_manual(
+    name = "Legende:",
+    values = c("Mittelwert" = "azure4", "Median" = "darkgoldenrod2")
+  ) +
+
+  labs(
+    x = "Block",
+    y = "Distanz (in mm)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold")
+  )
+
+# Interaktive Darstellung
+ggplotly(graph)
+```
+
+
+# Daten zusammengafasst (immer 3 Blöcke zusammengefasst)
+
+
+
+
+
+
+
+
+
