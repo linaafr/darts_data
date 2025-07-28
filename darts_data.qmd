@@ -207,45 +207,7 @@ saveWorkbook(wb, pfad, overwrite = TRUE)
 
 # Daten (jeder Block)
 
-Mittelwert pro Proband:
-
-```{r}
-#| eval: true
-#| echo: false
-
-library(DT)
-
-datatable(
-  transpose_mean,
-  rownames = F,
-  colnames = c("VP", "Block 1", "Block 2", "Block 3", "Block 4", "Block 5", "Block 6", "Block 7", "Block 8", "Block 9", "Block 10", "Block 11", "Block 12", "Block 13", "Block 14", "Block 15", "Block 16", "Block 17", "Block 18", "Block 19", "Block 20")
-) %>%
-   formatRound(columns = 2:ncol(transpose_mean), digits = 2) %>%
-  formatStyle(
-    columns = 1:ncol(transpose_mean)
-  )
-
-```
-
-Median pro Proband:
-
-```{r}
-#| eval: true
-#| echo: false
-
-library(dplyr)
-library(DT)
-
-datatable(
-  transpose_median,
-  rownames = F,
-  colnames = c("VP", "Block 1", "Block 2", "Block 3", "Block 4", "Block 5", "Block 6", "Block 7", "Block 8", "Block 9", "Block 10", "Block 11", "Block 12", "Block 13", "Block 14", "Block 15", "Block 16", "Block 17", "Block 18", "Block 19", "Block 20")
-) %>%
-  formatRound(columns = 2:ncol(transpose_median), digits = 2)
-```
-
-
-# Diagramm: Mittelwert zum Bulls Eye
+## Diagramm: Mittelwert zum Bulls Eye
 
 ```{r}
 #| eval: true
@@ -302,9 +264,102 @@ graph <- ggplot(darts_long, aes(x = block, y = Distanz, color = Typ)) +
 ggplotly(graph)
 ```
 
+::: {.panel-tabset}
+
+## Mittelwert
+
+```{r}
+#| eval: true
+#| echo: false
+
+library(DT)
+
+datatable(
+  transpose_mean,
+  rownames = F,
+  colnames = c("VP", "Block 1", "Block 2", "Block 3", "Block 4", "Block 5", "Block 6", "Block 7", "Block 8", "Block 9", "Block 10", "Block 11", "Block 12", "Block 13", "Block 14", "Block 15", "Block 16", "Block 17", "Block 18", "Block 19", "Block 20")
+) %>%
+   formatRound(columns = 2:ncol(transpose_mean), digits = 2) %>%
+  formatStyle(
+    columns = 1:ncol(transpose_mean)
+  )
+
+```
+
+## Median
+
+```{r}
+#| eval: true
+#| echo: false
+
+library(dplyr)
+library(DT)
+
+datatable(
+  transpose_median,
+  rownames = F,
+  colnames = c("VP", "Block 1", "Block 2", "Block 3", "Block 4", "Block 5", "Block 6", "Block 7", "Block 8", "Block 9", "Block 10", "Block 11", "Block 12", "Block 13", "Block 14", "Block 15", "Block 16", "Block 17", "Block 18", "Block 19", "Block 20")
+) %>%
+  formatRound(columns = 2:ncol(transpose_median), digits = 2)
+```
+
+:::
+
+
+
 
 # Daten zusammengafasst (immer 3 Blöcke zusammengefasst)
 
+```{r}
+#| eval: true
+#| echo: false
+
+darts_binned <- darts_distance %>%
+  filter(number %in% 1:8) %>%
+  mutate(
+    blockgruppe = case_when(
+      block %in% 1:3 ~ "Block 1–3",
+      block %in% 4:6 ~ "Block 4–6",
+      block %in% 7:9 ~ "Block 7–9",
+      block %in% 10:12 ~ "Block 10–12",
+      block %in% 13:15 ~ "Block 13–15",
+      TRUE ~ NA_character_
+    ),
+    # Faktor definieren für richtige Sortierung
+    blockgruppe = factor(blockgruppe,
+                         levels = c("Block 1–3", "Block 4–6", "Block 7–9", "Block 10–12", "Block 13–15"))
+  ) %>%
+  filter(!is.na(blockgruppe)) %>%
+  group_by(vp, blockgruppe) %>%
+  summarise(
+    mean_dist = mean(distance, na.rm = TRUE),
+    median_dist = median(distance, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+
+```
+
+```{r}
+
+# Mittelwerte transponieren
+means_wide <- darts_binned %>%
+  select(vp, blockgruppe, mean_dist) %>%
+  pivot_wider(names_from = blockgruppe, values_from = mean_dist, names_prefix = "mean_")
+
+# Mediane transponieren
+medians_wide <- darts_binned %>%
+  select(vp, blockgruppe, median_dist) %>%
+  pivot_wider(names_from = blockgruppe, values_from = median_dist, names_prefix = "median_")
+
+# Zusammenführen
+darts_transposed <- left_join(means_wide, medians_wide, by = "vp")
+
+```
+
+```{r}
+datatable(darts_transposed)
+```
 
 
 
