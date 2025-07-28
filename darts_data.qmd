@@ -307,8 +307,9 @@ datatable(
 
 
 
-
 # Daten zusammengafasst (immer 3 Blöcke zusammengefasst)
+
+3 Blöcke á 8 Würfe entspricht 24 Würfe 
 
 ```{r}
 #| eval: true
@@ -358,8 +359,30 @@ darts_transposed <- left_join(means_wide, medians_wide, by = "vp")
 ```
 
 ```{r}
+# Mittelwerte transponieren
+mean_transposed_3 <- darts_binned %>%
+  select(vp, blockgruppe, mean_dist) %>%
+  pivot_wider(
+    names_from = blockgruppe,
+    values_from = mean_dist
+  )
+
+# Mediane transponieren
+median_transposed_3 <- darts_binned %>%
+  select(vp, blockgruppe, median_dist) %>%
+  pivot_wider(
+    names_from = blockgruppe,
+    values_from = median_dist
+  )
+```
+
+
+
+```{r}
 datatable(darts_transposed)
 ```
+
+
 
 
 
