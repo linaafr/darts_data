@@ -46,6 +46,7 @@ library(stringr)
 library(writexl)
 library(openxlsx)
 library(DT)
+library(knitr)
 
 
 darts = read_excel("/Users/linafricke/Documents/Promotion/Studie 2 /1_Pilotstudien/Pilot 2/Pilot_2_Übersicht.xlsx")
@@ -165,7 +166,6 @@ mittelwerte_wide <- mean_distance %>%
 median_wide <- median_distance %>%
   pivot_wider(names_from = vp, values_from = median_distance)
 
-
 # Transponieren: Mittelwert
 transpose_mean <- mittelwerte_wide %>%
   select(-block) %>%
@@ -264,6 +264,7 @@ graph <- ggplot(darts_long, aes(x = block, y = Distanz, color = Typ)) +
 ggplotly(graph)
 ```
 
+## Tabelle
 ::: {.panel-tabset}
 
 ## Mittelwert
@@ -271,8 +272,6 @@ ggplotly(graph)
 ```{r}
 #| eval: true
 #| echo: false
-
-library(DT)
 
 datatable(
   transpose_mean,
@@ -292,9 +291,6 @@ datatable(
 #| eval: true
 #| echo: false
 
-library(dplyr)
-library(DT)
-
 datatable(
   transpose_median,
   rownames = F,
@@ -305,11 +301,7 @@ datatable(
 
 :::
 
-
-
-# Daten zusammengafasst (immer 3 Blöcke zusammengefasst)
-
-3 Blöcke á 8 Würfe entspricht 24 Würfe 
+# Daten zusammengefasst (3 Blöcke)
 
 ```{r}
 #| eval: true
@@ -342,50 +334,255 @@ darts_binned <- darts_distance %>%
 ```
 
 ```{r}
+#| eval: true
+#| echo: false
 
 # Mittelwerte transponieren
-means_wide <- darts_binned %>%
+means_wide_3 <- darts_binned %>%
   select(vp, blockgruppe, mean_dist) %>%
-  pivot_wider(names_from = blockgruppe, values_from = mean_dist, names_prefix = "mean_")
+  pivot_wider(names_from = blockgruppe, values_from = mean_dist)
 
 # Mediane transponieren
-medians_wide <- darts_binned %>%
+medians_wide_3 <- darts_binned %>%
   select(vp, blockgruppe, median_dist) %>%
-  pivot_wider(names_from = blockgruppe, values_from = median_dist, names_prefix = "median_")
+  pivot_wider(names_from = blockgruppe, values_from = median_dist)
 
-# Zusammenführen
-darts_transposed <- left_join(means_wide, medians_wide, by = "vp")
 
 ```
 
 ```{r}
-# Mittelwerte transponieren
-mean_transposed_3 <- darts_binned %>%
-  select(vp, blockgruppe, mean_dist) %>%
-  pivot_wider(
-    names_from = blockgruppe,
-    values_from = mean_dist
-  )
+#| eval: true
+#| echo: false
 
-# Mediane transponieren
-median_transposed_3 <- darts_binned %>%
-  select(vp, blockgruppe, median_dist) %>%
-  pivot_wider(
-    names_from = blockgruppe,
-    values_from = median_dist
-  )
+# Blätter hinzufügen
+addWorksheet(wb, "Mittelwert 3 Blöcke")
+addWorksheet(wb, "Median 3 Blöcke")
+
+# Daten schreiben
+writeData(wb, sheet = "Mittelwert 3 Blöcke", means_wide_3)
+writeData(wb, sheet = "Median 3 Blöcke", medians_wide_3)
+
+# Datei speichern
+saveWorkbook(wb, pfad, overwrite = TRUE)
 ```
 
+
+## Diagramm: Mittelwert über 3 Blöcke zum Bulls Eye
+
+3 Blöcke á 8 Würfe entspricht 24 Würfen (siehe hier: 25 Würfe)
+
+```{r}
+#| eval: true
+#| echo: false
+
+# Aggregieren nach Blockgruppe (über alle vp)
+darts_binned_summary <- darts_binned %>%
+  group_by(blockgruppe) %>%
+  summarise(
+    mean_dist = mean(mean_dist, na.rm = TRUE),
+    median_dist = mean(median_dist, na.rm = TRUE),  # Achtung: Mittel der Mediane
+    .groups = "drop"
+  )
+
+darts_binned_long <- darts_binned_summary %>%
+  pivot_longer(cols = c(mean_dist, median_dist),
+               names_to = "Typ",
+               values_to = "Distanz") %>%
+  mutate(Typ = recode(Typ,
+                      "mean_dist" = "Mittelwert",
+                      "median_dist" = "Median"))
+
+graph <- ggplot(darts_binned_long, aes(x = blockgruppe, y = Distanz, color = Typ, group = Typ)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dotted") +
+  
+  scale_y_continuous(limits = c(70, 90), breaks = seq(70, 90, by = 5)) +
+  
+  scale_color_manual(
+    name = "Legende:",
+    values = c("Mittelwert" = "azure4", "Median" = "darkgoldenrod2")
+  ) +
+
+  labs(
+    x = "Blockgruppe",
+    y = "Distanz (in mm)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold")
+  )
+
+ggplotly(graph)
+```
+
+## Tabelle
+::: {.panel-tabset}
+## Mittelwert
+```{r}
+#| eval: true
+#| echo: false
+
+datatable(means_wide_3,
+  rownames = F,
+  colnames = c("VP", "Block 1-3", "Block 4-6", "Block 7-9", "Block 10-12", "Block 13-15")
+) %>%
+  formatRound(columns = 2:ncol(means_wide_3), digits = 2)
+```
+
+## Median 
+```{r}
+#| eval: true
+#| echo: false
+
+datatable(medians_wide_3,
+  rownames = F,
+  colnames = c("VP", "Block 1-3", "Block 4-6", "Block 7-9", "Block 10-12", "Block 13-15")
+) %>%
+  formatRound(columns = 2:ncol(medians_wide_3), digits = 2)
+```
+:::
+
+
+## Anova
+
+```{r}
+#| eval: true
+#| include: false
+
+# Wichtig: Faktoren korrekt setzen
+darts_binned$vp <- factor(darts_binned$vp)
+darts_binned$blockgruppe <- factor(darts_binned$blockgruppe)
+
+# Repeated Measures ANOVA mit aov
+aov_result <- aov(mean_dist ~ blockgruppe + Error(vp/blockgruppe), data = darts_binned)
+
+# Ergebnis anzeigen
+summary(aov_result)
+```
+
+```{r}
+#| eval: true
+#| echo: false
+
+# Modell berechnen
+aov_result <- aov(mean_dist ~ blockgruppe + Error(vp/blockgruppe), data = darts_binned)
+
+# Summary extrahieren
+aov_summary <- summary(aov_result)
+
+# Ergebnisse der within-subject Komponente
+aov_table <- as.data.frame(aov_summary[[2]][[1]])
+
+library(knitr)
+kable(aov_table, digits = 2)
+
+```
 
 
 ```{r}
-datatable(darts_transposed)
+#| eval: true
+#| echo: false
+#| include: false
+
+# T-Test
+# Bonferroni-korrigierte paarweise t-Tests
+t.test_results <- pairwise.t.test(
+  darts_binned$mean_dist,
+  darts_binned$blockgruppe,
+  paired = TRUE,
+  p.adjust.method = "bonferroni"
+)
+
+# In Matrix gespeicherte p-Werte extrahieren
+p_matrix <- t.test_results$p.value
+
+# In lange Tabelle umwandeln
+
+t.test_table <- as.data.frame(as.table(p_matrix)) %>%
+  rename(Blockgruppe_1 = Var1,
+         Blockgruppe_2 = Var2,
+         p_wert = Freq) %>%
+  mutate(p_wert = round(p_wert, 4))  # auf 4 Nachkommastellen runden
+
+# als table
+kable(t.test_table, digits = 2)
 ```
 
+## Prozentualer Lernerfolg
 
+Der prozentuale Lernerfolg berechnet sich als $100\% - \left( \frac{\text{Endwert}}{\text{Startwert}} \times 100\% \right)$. 
 
+::: {.panel-tabset}
 
+## Mittelwert
 
+```{r}
+#| eval: true
+#| echo: false
+
+# Zwei separate Tabellen für Anfangs- und Endwerte
+start_values <- darts_binned %>%
+  filter(blockgruppe == "Block 1–3") %>%
+  select(vp, start = mean_dist)
+
+end_values <- darts_binned %>%
+  filter(blockgruppe == "Block 13–15") %>%
+  select(vp, end = mean_dist)
+
+# Join beider Tabellen
+lernerfolg_df <- left_join(start_values, end_values, by = "vp") %>%
+  mutate(
+    start_prozent = 100,
+    end_prozent = (end / start) * 100,
+    lernerfolg = start_prozent - end_prozent
+  )
+```
+
+Im Mittel beträgt der Lernerfolg _m_=`r mean(lernerfolg_df$lernerfolg)`%.
+
+```{r}
+#| eval: true
+#| echo: false
+
+kable(lernerfolg_df, digits = 2, caption = "Prozentualer Lernerfolg pro Proband*in")
+```
+
+## Median
+
+```{r}
+#| eval: true
+#| echo: false
+#| include: false
+
+# Zwei separate Tabellen für Anfangs- und Endwerte
+start_values <- darts_binned %>%
+  filter(blockgruppe == "Block 1–3") %>%
+  select(vp, start = median_dist)
+
+end_values <- darts_binned %>%
+  filter(blockgruppe == "Block 13–15") %>%
+  select(vp, end = median_dist)
+
+# Join beider Tabellen
+lernerfolg_df_med_3<- left_join(start_values, end_values, by = "vp") %>%
+  mutate(
+    start_prozent = 100,
+    end_prozent = (end / start) * 100,
+    lernerfolg = start_prozent - end_prozent
+  )
+```
+
+Im Mittel beträgt der Lernerfolg _m_=`r mean(lernerfolg_df_med_3$lernerfolg)`%.
+```{r}
+#| eval: true
+#| echo: false
+kable(lernerfolg_df, digits = 2, caption = "Prozentualer Lernerfolg pro Proband*in")
+```
+:::
 
 
 
