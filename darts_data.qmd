@@ -9,7 +9,6 @@ format:
     toc-title: Inhalt
     toc-location: left 
     theme: 
-      dark: superhero
       light: minty
     fontsize: 32 px 
     font-family: Roboto
@@ -208,9 +207,9 @@ darts_summary <- darts_distance %>%
 ```
 # Daten (Block 1-20)
 
-::: {.panel-tabset}
-## Diagramme
 
+## Diagramme
+::: {.panel-tabset}
 ## Distanzen
 
 ```{r}
@@ -255,6 +254,50 @@ ggplotly(graph)
 
 ## Fehler
 
+```{r}
+#| eval: true
+#| echo: false
+#| include: false
+
+# Berechnen
+# Anzahl der NAs pro Block (Würfe 1–8)
+na_counts <- darts_distance %>%
+  filter(number %in% 1:8) %>%
+  group_by(block) %>%
+  summarise(
+    missing = sum(is.na(distance)),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    total_possible = 8 * ((ncol(darts) - 2) / 2),  # 8 Würfe × Anzahl VPs
+    missing_percent = (missing / total_possible) * 100
+  )
+
+```
+
+```{r}
+#| eval: true
+#| echo: false
+
+# Plot
+missingv = ggplot(na_counts, aes(x = block, y = missing_percent)) +
+  geom_line(color = "firebrick", size = 1.2) +
+  geom_point(color = "firebrick", size = 2) +
+  labs(
+    title = "Prozentuale Fehlerrate pro Block",
+    x = "Block",
+    y = "Fehlerrate (%)"
+  ) +
+  scale_x_continuous(breaks = 1:20) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold")
+  )
+
+ggplotly(missingv)
+```
+
 :::
 ## Tabelle
 ::: {.panel-tabset}
@@ -267,13 +310,21 @@ ggplotly(graph)
 
 datatable(
   transpose_mean,
-  rownames = F,
-  colnames = c("VP", "Block 1", "Block 2", "Block 3", "Block 4", "Block 5", "Block 6", "Block 7", "Block 8", "Block 9", "Block 10", "Block 11", "Block 12", "Block 13", "Block 14", "Block 15", "Block 16", "Block 17", "Block 18", "Block 19", "Block 20")
-) %>%
-   formatRound(columns = 2:ncol(transpose_mean), digits = 2) %>%
-  formatStyle(
-    columns = 1:ncol(transpose_mean)
+  rownames = FALSE,
+  colnames = c("VP", "Block 1", "Block 2", "Block 3", "Block 4", "Block 5", "Block 6",
+               "Block 7", "Block 8", "Block 9", "Block 10", "Block 11", "Block 12",
+               "Block 13", "Block 14", "Block 15", "Block 16", "Block 17", "Block 18",
+               "Block 19", "Block 20"),
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    pageLength = 10
   )
+) %>%
+  formatRound(columns = 2:ncol(transpose_mean), digits = 2) %>%
+  formatStyle(columns = 1:ncol(transpose_mean))
+
 
 ```
 
@@ -286,7 +337,13 @@ datatable(
 datatable(
   transpose_median,
   rownames = F,
-  colnames = c("VP", "Block 1", "Block 2", "Block 3", "Block 4", "Block 5", "Block 6", "Block 7", "Block 8", "Block 9", "Block 10", "Block 11", "Block 12", "Block 13", "Block 14", "Block 15", "Block 16", "Block 17", "Block 18", "Block 19", "Block 20")
+  colnames = c("VP", "Block 1", "Block 2", "Block 3", "Block 4", "Block 5", "Block 6", "Block 7", "Block 8", "Block 9", "Block 10", "Block 11", "Block 12", "Block 13", "Block 14", "Block 15", "Block 16", "Block 17", "Block 18", "Block 19", "Block 20"),
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    pageLength = 10
+  )
 ) %>%
   formatRound(columns = 2:ncol(transpose_median), digits = 2)
 ```
@@ -296,9 +353,6 @@ datatable(
 
 ## Anova mit Messwiederholung
 
-::: {.callout-important}
-vp09 wurde rausgenommen, da unvollständiger Datensatz!
-:::
 
 ::: {.panel-tabset}
 
@@ -307,7 +361,7 @@ vp09 wurde rausgenommen, da unvollständiger Datensatz!
 #| eval: true
 #| echo: false
 #| include: false
-#| 
+
 mean_distance <- mean_distance %>%
   filter(vp != "vp09") %>%     # vp09 ausschließen
   mutate(block = factor(block))
@@ -359,7 +413,7 @@ kable(contrast_table, caption = "Kontraste")
 #| eval: true
 #| echo: false
 #| include: false
-#| 
+
 median_distance <- median_distance %>%
   filter(vp != "vp09") %>%     # vp09 ausschließen
   mutate(block = factor(block))
@@ -485,11 +539,338 @@ kable(lernerfolg_df_median_1_20, digits = 2, caption = "Lernerfolg von Block 1 z
 
 # Daten (5x4 Blöcke, gesamt 20 Blöcke)
 
+```{r}
+#| eval: true
+#| echo: false
+
+# 4 Blöcke zusammenschließen
+darts_binned_4 <- darts_distance %>%
+  filter(number %in% 1:8) %>%
+  mutate(
+    blockgruppe = case_when(
+      block %in% 1:4   ~ "Block 1–4",
+      block %in% 5:8   ~ "Block 5–8",
+      block %in% 9:12  ~ "Block 9–12",
+      block %in% 13:16 ~ "Block 13–16",
+      block %in% 17:20 ~ "Block 17–20",
+      TRUE ~ NA_character_
+    ),
+    blockgruppe = factor(
+      blockgruppe,
+      levels = c("Block 1–4", "Block 5–8", "Block 9–12", "Block 13–16", "Block 17–20")
+    )
+  ) %>%
+  filter(!is.na(blockgruppe)) %>%
+  group_by(vp, blockgruppe) %>%
+  summarise(
+    mean_dist = mean(distance, na.rm = TRUE),
+    median_dist = median(distance, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+```{r}
+#| eval: true
+#| echo: false
+
+# Wide Format
+# Mittelwerte transponieren
+means_wide_4 <- darts_binned_4 %>%
+  select(vp, blockgruppe, mean_dist) %>%
+  pivot_wider(names_from = blockgruppe, values_from = mean_dist)
+
+# Mediane transponieren
+medians_wide_4 <- darts_binned_4 %>%
+  select(vp, blockgruppe, median_dist) %>%
+  pivot_wider(names_from = blockgruppe, values_from = median_dist)
+```
+
+```{r}
+#| eval: true
+#| echo: false
+
+# Neue Blätter hinzufügen
+addWorksheet(wb, "Mittelwert 4 Blöcke")
+addWorksheet(wb, "Median 4 Blöcke")
+
+# Daten schreiben
+writeData(wb, sheet = "Mittelwert 4 Blöcke", means_wide_4)
+writeData(wb, sheet = "Median 4 Blöcke", medians_wide_4)
+
+# Datei speichern
+saveWorkbook(wb, pfad, overwrite = TRUE)
+
+```
+
+## Diagramme
+
+```{r}
+#| eval: true
+#| echo: false
+
+# NA-Zählung pro Block (Würfe 1–8)
+na_counts <- darts_distance %>%
+  filter(number %in% 1:8) %>%
+  group_by(block) %>%
+  summarise(missing = sum(is.na(distance)), .groups = "drop")
+
+# Neue Blockgruppen (4er Schritte)
+na_binned_4 <- na_counts %>%
+  mutate(
+    blockgruppe = case_when(
+      block %in% 1:4   ~ "Block 1–4",
+      block %in% 5:8   ~ "Block 5–8",
+      block %in% 9:12  ~ "Block 9–12",
+      block %in% 13:16 ~ "Block 13–16",
+      block %in% 17:20 ~ "Block 17–20",
+      TRUE ~ NA_character_
+    ),
+    blockgruppe = factor(
+      blockgruppe,
+      levels = c("Block 1–4", "Block 5–8", "Block 9–12", "Block 13–16", "Block 17–20")
+    )
+  ) %>%
+  filter(!is.na(blockgruppe)) %>%
+  group_by(blockgruppe) %>%
+  summarise(
+    fehlersumme = sum(missing),
+    fehlermittel = mean(missing),
+    .groups = "drop"
+  )
+
+```
+
+::: {.panel-tabset}
+## Distanzen
+```{r}
+#| eval: true
+#| echo: false
+
+# Zusammenfassen über alle vp
+darts_binned_summary_4 <- darts_binned_4 %>%
+  group_by(blockgruppe) %>%
+  summarise(
+    mean_dist = mean(mean_dist, na.rm = TRUE),
+    median_dist = mean(median_dist, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Long-Format für ggplot
+darts_binned_long_4 <- darts_binned_summary_4 %>%
+  pivot_longer(cols = c(mean_dist, median_dist),
+               names_to = "Typ",
+               values_to = "Distanz") %>%
+  mutate(Typ = recode(Typ,
+                      "mean_dist" = "Mittelwert",
+                      "median_dist" = "Median"))
+
+# Plot
+graph_4 <- ggplot(darts_binned_long_4, aes(x = blockgruppe, y = Distanz, color = Typ, group = Typ)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dotted") +
+  scale_y_continuous(limits = c(70, 90), breaks = seq(70, 90, by = 5)) +
+  scale_color_manual(
+    name = "Legende:",
+    values = c("Mittelwert" = "azure4", "Median" = "darkgoldenrod2")
+  ) +
+  labs(
+    x = "Blockgruppe",
+    y = "Distanz (in mm)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold")
+  )
+
+ggplotly(graph_4)
+
+```
+
+## Fehler
+
+```{r}
+#| eval: true
+#| echo: false
+
+# Daten in Long-Format bringen für Plot
+na_binned_long <- na_binned_4 %>%
+  pivot_longer(cols = c(fehlersumme, fehlermittel),
+               names_to = "Typ",
+               values_to = "Fehler") %>%
+  mutate(Typ = recode(Typ,
+                      "fehlersumme" = "Fehlersumme",
+                      "fehlermittel" = "Fehlermittel"))
+
+# Plot
+na_binned_plot <- ggplot(na_binned_long, aes(x = blockgruppe, y = Fehler, group = Typ, color = Typ)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  labs(
+    title = "Fehlerentwicklung über 4er-Blockgruppen",
+    x = "Blockgruppe",
+    y = "Fehleranzahl"
+  ) +
+  scale_color_manual(values = c("Fehlersumme" = "firebrick", "Fehlermittel" = "steelblue")) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold")
+  )
+
+ggplotly(na_binned_plot)
+```
+
+:::
 
 
 
+## Tabelle
+::: {.panel-tabset}
+
+## Mittelwert
+
+```{r}
+#| eval: true
+#| echo: false
+
+datatable(means_wide_4,
+  rownames = FALSE,
+  colnames = c("VP", "Block 1–4", "Block 5–8", "Block 9–12", "Block 13–16", "Block 17–20"),
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    pageLength = 10
+  )
+) %>%
+  formatRound(columns = 2:ncol(means_wide_4), digits = 2)
+```
+
+## Median
+```{r}
+#| eval: true
+#| echo: false
+
+datatable(medians_wide_4,
+  rownames = FALSE,
+  colnames = c("VP", "Block 1–4", "Block 5–8", "Block 9–12", "Block 13–16", "Block 17–20"),
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    pageLength = 10
+  )
+) %>%
+  formatRound(columns = 2:ncol(medians_wide_4), digits = 2)
+
+```
+:::
 
 
+## Anova mit Messwiederholung
+
+::: {.panel-tabset}
+
+## Mittelwert
+
+```{r}
+#| eval: true
+#| include: false
+
+# Faktoren korrekt setzen
+darts_binned_4$vp <- factor(darts_binned_4$vp)
+darts_binned_4$blockgruppe <- factor(darts_binned_4$blockgruppe)
+
+# ANOVA mit ezANOVA
+anova_result_mean <- ezANOVA(
+  data = darts_binned_4,
+  dv = mean_dist,
+  wid = vp,
+  within = blockgruppe,
+  type = 3,
+  detailed = TRUE
+)
+
+# Modell mit afex
+aov_afex_mean <- aov_ez(
+  id = "vp",
+  dv = "mean_dist",
+  within = "blockgruppe",
+  data = darts_binned_4,
+  type = 3
+)
+
+# Emmeans und Kontraste
+emm_mean <- emmeans(aov_afex_mean, ~ blockgruppe)
+contrast_mean <- contrast(emm_mean, method = "poly")
+```
+
+```{r}
+#| eval: true
+#| echo: false
+
+anova_table_mean <- anova_result_mean$ANOVA %>%
+  mutate(across(where(is.numeric), ~ round(., 3)))
+
+kable(anova_table_mean, caption = "ANOVA Ergebnisse (Mittelwert, 4er-Blöcke)")
+kable(contrast_mean, caption = "Lineare Kontraste (Mittelwert)")
+```
+
+
+## Median
+
+
+```{r}
+#| eval: true
+#| include: false
+
+# Faktoren korrekt setzen
+darts_binned_4$vp <- factor(darts_binned_4$vp)
+darts_binned_4$blockgruppe <- factor(darts_binned_4$blockgruppe)
+
+# ANOVA mit ezANOVA
+anova_result_median <- ezANOVA(
+  data = darts_binned_4,
+  dv = median_dist,
+  wid = vp,
+  within = blockgruppe,
+  type = 3,
+  detailed = TRUE
+)
+
+# Modell mit afex
+aov_afex_median <- aov_ez(
+  id = "vp",
+  dv = "median_dist",
+  within = "blockgruppe",
+  data = darts_binned_4,
+  type = 3
+)
+
+# Emmeans und Kontraste
+emm_median <- emmeans(aov_afex_median, ~ blockgruppe)
+contrast_median <- contrast(emm_median, method = "poly")
+```
+
+
+```{r}
+#| eval: true
+#| echo: false
+
+anova_table_median <- anova_result_median$ANOVA %>%
+  mutate(across(where(is.numeric), ~ round(., 3)))
+
+kable(anova_table_median, caption = "ANOVA Ergebnisse (Median, 4er-Blöcke)")
+kable(contrast_median, caption = "Lineare Kontraste (Median)")
+```
+
+:::
 
 
 # Daten (5x3 Blöcke, gesamt 15 Blöcke)
@@ -557,8 +938,8 @@ writeData(wb, sheet = "Median 3 Blöcke", medians_wide_3)
 saveWorkbook(wb, pfad, overwrite = TRUE)
 ```
 
-
-## Diagramm: Mittelwert über 3 Blöcke zum Bulls Eye
+::: {.panel-tabset}
+## Distanzen
 
 3 Blöcke á 8 Würfe entspricht 24 Würfen (siehe hier: 25 Würfe)
 
@@ -610,6 +991,114 @@ graph <- ggplot(darts_binned_long, aes(x = blockgruppe, y = Distanz, color = Typ
 ggplotly(graph)
 ```
 
+## Fehler
+
+```{r}
+#| eval: true
+#| echo: false
+
+# Fehler berechnen
+# NA-Zählung pro Block
+na_counts <- darts_distance %>%
+  filter(number %in% 1:8) %>%
+  group_by(block) %>%
+  summarise(missing = sum(is.na(distance)), .groups = "drop")
+
+# Blockgruppen definieren
+na_binned <- na_counts %>%
+  mutate(
+    blockgruppe = case_when(
+      block %in% 1:3 ~ "Block 1–3",
+      block %in% 4:6 ~ "Block 4–6",
+      block %in% 7:9 ~ "Block 7–9",
+      block %in% 10:12 ~ "Block 10–12",
+      block %in% 13:15 ~ "Block 13–15",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(blockgruppe)) %>%
+  group_by(blockgruppe) %>%
+  summarise(
+    fehlersumme = sum(missing),
+    fehlermittel = mean(missing),
+    .groups = "drop"
+  )
+```
+
+```{r}
+#| eval: true
+#| echo: false
+#| include: false
+
+# diagramm
+# Schritt 1: Fehlende Werte (NA) zählen pro Block
+na_counts <- darts_distance %>%
+  filter(number %in% 1:8) %>%
+  group_by(block, vp) %>%
+  summarise(n_missing = sum(is.na(distance)), .groups = "drop") %>%
+  group_by(block) %>%
+  summarise(missing = sum(n_missing), .groups = "drop")
+
+# Schritt 2: Blockgruppen zuordnen und aggregieren
+na_binned <- na_counts %>%
+  mutate(
+    blockgruppe = case_when(
+      block %in% 1:3 ~ "Block 1–3",
+      block %in% 4:6 ~ "Block 4–6",
+      block %in% 7:9 ~ "Block 7–9",
+      block %in% 10:12 ~ "Block 10–12",
+      block %in% 13:15 ~ "Block 13–15",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(blockgruppe)) %>%
+  group_by(blockgruppe) %>%
+  summarise(
+    fehlersumme = sum(missing),
+    fehlermittel = mean(missing),
+    .groups = "drop"
+  )
+
+# Faktor-Reihenfolge definieren
+na_binned$blockgruppe <- factor(
+  na_binned$blockgruppe,
+  levels = c("Block 1–3", "Block 4–6", "Block 7–9", "Block 10–12", "Block 13–15")
+)
+```
+
+```{r}
+#| eval: true
+#| echo: false
+
+# pLot
+missingv = ggplot(na_binned, aes(x = blockgruppe)) +
+  geom_line(aes(y = fehlersumme, group = 1, color = "Fehlersumme"), size = 1.2) +
+  geom_point(aes(y = fehlersumme, color = "Fehlersumme"), size = 2) +
+
+  geom_line(aes(y = fehlermittel, group = 1, color = "Fehlermittelwert"), linetype = "dashed", size = 1) +
+  geom_point(aes(y = fehlermittel, color = "Fehlermittelwert"), size = 2, shape = 17) +
+
+  scale_color_manual(
+    name = "Legende:",
+    values = c("Fehlersumme" = "firebrick", "Fehlermittelwert" = "darkorange3")
+  ) +
+
+  labs(
+    x = "Blockgruppe",
+    y = "Fehleranzahl (NA)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold")
+  )
+ggplotly(missingv)
+```
+
+
+:::
 ## Tabelle
 ::: {.panel-tabset}
 ## Mittelwert
@@ -619,7 +1108,13 @@ ggplotly(graph)
 
 datatable(means_wide_3,
   rownames = F,
-  colnames = c("VP", "Block 1-3", "Block 4-6", "Block 7-9", "Block 10-12", "Block 13-15")
+  colnames = c("VP", "Block 1-3", "Block 4-6", "Block 7-9", "Block 10-12", "Block 13-15"),
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    pageLength = 10
+  )
 ) %>%
   formatRound(columns = 2:ncol(means_wide_3), digits = 2)
 ```
@@ -631,7 +1126,13 @@ datatable(means_wide_3,
 
 datatable(medians_wide_3,
   rownames = F,
-  colnames = c("VP", "Block 1-3", "Block 4-6", "Block 7-9", "Block 10-12", "Block 13-15")
+  colnames = c("VP", "Block 1-3", "Block 4-6", "Block 7-9", "Block 10-12", "Block 13-15"),
+  extensions = 'Buttons',
+  options = list(
+    dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    pageLength = 10
+  )
 ) %>%
   formatRound(columns = 2:ncol(medians_wide_3), digits = 2)
 ```
